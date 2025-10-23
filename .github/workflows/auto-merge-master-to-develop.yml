@@ -1,4 +1,4 @@
-name: Sync main → develop after PR merge
+name: Sync main → develop after PR merge or direct push
 
 on:
   pull_request:
@@ -6,15 +6,19 @@ on:
       - main
     types:
       - closed
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   merge:
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'hotfix/')
     runs-on: ubuntu-latest
-
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,19 +33,20 @@ jobs:
       - name: Fetch develop branch
         run: git fetch origin develop:develop
 
-      - name: Merge main into develop
+      - name: Merge main into develop and Push
         run: |
           git checkout develop
           set +e
+          
           git merge origin/main --no-commit --no-ff
           MERGE_STATUS=$?
+          
           set -e
-
           if [ $MERGE_STATUS -ne 0 ]; then
-            echo "❌ Conflicts detected. You must resolve the merge manually."
+            echo "::warning:: ❌ Conflicts detected when merging 'main' into 'develop'. Synchronization must be done manually."
             git merge --abort || true
-            exit 1
+            exit 0
           fi
-
-          git commit -m "chore: merge main → develop [automated after PR merge]"
+          
+          git commit -m "chore: merge main → develop [automated]"
           git push origin develop
