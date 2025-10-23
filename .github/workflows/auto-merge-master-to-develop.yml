@@ -74,10 +74,19 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ env.PR_NUMBER }}
         run: |
-          MERGEABLE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" \
-            | jq -r '.mergeable')
+          # Esperar a que GitHub calcule mergeable
+          for i in {1..5}; do
+            MERGEABLE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" \
+              | jq -r '.mergeable')
+
+            if [ "$MERGEABLE" != "null" ]; then
+              break
+            fi
+            echo "mergeable = null, retrying in 2s..."
+            sleep 2
+          done
 
           if [ "$MERGEABLE" = "true" ]; then
             curl -s -X PUT \
