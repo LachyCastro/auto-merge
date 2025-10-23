@@ -1,2 +1,2 @@
 # auto-merge
-# # Conflict test 6
+# # Conflict test 7
