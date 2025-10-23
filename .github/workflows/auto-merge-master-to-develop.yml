@@ -1,64 +1,65 @@
-name: Sync main → develop after PR merge or direct push
+name: Sync master → develop
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
   push:
     branches:
-      - main
-
+      - master
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
+      
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  merge:
+  sync:
     runs-on: ubuntu-latest
+
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Configure Git
-      - name: Configure Git
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # 3️⃣ Decide if we should run merge
-      - name: Determine if merge should run
+          
+      - name: Determine if sync should run
         id: check_merge
         run: |
+          # Si es un 'push' directo, siempre se ejecuta.
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            echo "run_merge=true" >> $GITHUB_OUTPUT
-          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" = "true" ] && [[ "${{ github.event.pull_request.head.ref }}" == hotfix/* ]]; then
-            echo "run_merge=true" >> $GITHUB_OUTPUT
+            echo "run_sync=true" >> $GITHUB_OUTPUT
+          # Si es un 'pull_request' cerrado, se ejecuta solo si 'merged' es 'true'.
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            echo "run_sync=true" >> $GITHUB_OUTPUT
           else
-            echo "run_merge=false" >> $GITHUB_OUTPUT
+            echo "run_sync=false" >> $GITHUB_OUTPUT
           fi
 
-      # 4️⃣ Fetch develop branch
-      - name: Fetch develop branch
-        if: steps.check_merge.outputs.run_merge == 'true'
-        run: git fetch origin develop:develop
-
-      # 5️⃣ Merge main into develop
-      - name: Merge main into develop
-        if: steps.check_merge.outputs.run_merge == 'true'
+      - name: Create sync branch
+        if: steps.check_merge.outputs.run_sync == 'true'
         run: |
-          git checkout develop
-          set +e
-          git merge origin/main --no-commit --no-ff
-          MERGE_STATUS=$?
-          set -e
-          if [ $MERGE_STATUS -ne 0 ]; then
-            echo "❌ Conflictos detectados. Debes hacer el merge manualmente."
-            git merge --abort || true
-            exit 1
-          fi
-          git commit -m "chore: merge main → develop [automated]"
-          git push origin develop
+          git checkout -b auto/sync-master-develop
+          git merge origin/develop || true
+          git merge origin/master --no-ff -m "chore: sync master → develop [automated]"
+
+      - name: Push sync branch
+        if: steps.check_merge.outputs.run_sync == 'true'
+        run: |
+          git push -f origin auto/sync-master-develop
+
+      - name: Create Pull Request
+        if: steps.check_merge.outputs.run_sync == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PAT_FOR_PR }}
+          branch: auto/sync-master-develop
+          base: develop
+          title: "chore: sync master → develop [automated]"
+          body: "This PR was automatically created to sync master into develop."
