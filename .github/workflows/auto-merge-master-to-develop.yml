@@ -1,12 +1,12 @@
-name: Sync master → develop
+name: Sync main → develop
 
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
     types:
       - closed
       
@@ -45,21 +45,21 @@ jobs:
       - name: Create sync branch
         if: steps.check_merge.outputs.run_sync == 'true'
         run: |
-          git checkout -b auto/sync-master-develop
+          git checkout -b auto/sync-main-develop
           git merge origin/develop || true
-          git merge origin/master --no-ff -m "chore: sync master → develop [automated]"
+          git merge origin/main --no-ff -m "chore: sync main → develop [automated]"
 
       - name: Push sync branch
         if: steps.check_merge.outputs.run_sync == 'true'
         run: |
-          git push -f origin auto/sync-master-develop
+          git push -f origin auto/sync-main-develop
 
       - name: Create Pull Request
         if: steps.check_merge.outputs.run_sync == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PAT_FOR_PR }}
-          branch: auto/sync-master-develop
+          branch: auto/sync-main-develop
           base: develop
-          title: "chore: sync master → develop [automated]"
-          body: "This PR was automatically created to sync master into develop."
+          title: "chore: sync main → develop [automated]"
+          body: "This PR was automatically created to sync main into develop."
