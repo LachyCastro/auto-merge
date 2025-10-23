@@ -34,19 +34,26 @@ jobs:
         run: |
           BRANCH="auto/sync-main-develop-$(date +%s)"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          # Traer todas las ramas y commits
           git fetch origin develop
+          git fetch origin main
+          # Asegurarse que develop local esté actualizado
           git checkout develop
+          git pull origin develop
+          # Crear rama intermedia
           git checkout -b $BRANCH
+          # Merge de main en la rama intermedia
           git merge origin/main --no-ff -m "chore: sync main → develop [automated]"
+          # Push de la rama intermedia
           git push origin $BRANCH
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT_FOR_PR }}
-          branch: ${{ env.BRANCH }}     
-          base: develop                 
+          branch: ${{ env.BRANCH }}   # rama intermedia = head
+          base: develop                # rama destino
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
-          draft: false                  
-          delete-branch: true            
+          draft: false                 # PR no es borrador
+          delete-branch: true          # borrar rama tras merge
