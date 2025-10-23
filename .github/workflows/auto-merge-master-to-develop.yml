@@ -1,9 +1,11 @@
 name: Sync main → develop
 
 on:
+  # Dispara cuando hay un push a main
   push:
     branches:
       - main
+  # Opcional: También se puede disparar si una PR a main se cierra (merged)
   pull_request:
     branches:
       - main
@@ -22,7 +24,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Necesitamos profundidad 0 para comparar adecuadamente las ramas
+          # Necesitamos profundidad completa para las operaciones git y comparaciones
           fetch-depth: 0
 
       - name: Configure git
@@ -42,9 +44,12 @@ jobs:
           git fetch origin develop
           
           # 1. Verificar si 'develop' ya contiene todos los commits de 'main'.
+          # Si 'main' es un ancestro de 'develop', no hay nuevos commits para sincronizar.
           if git merge-base --is-ancestor origin/main origin/develop; then
             echo "La rama 'main' es un ancestro de 'develop'. No hay nuevos commits en 'main' para sincronizar."
             echo "Saltando la creación de rama y el Pull Request."
+            # Establecemos la variable para que el paso siguiente no se ejecute
+            echo "SHOULD_SKIP=true" >> $GITHUB_ENV
             exit 0
           fi
 
@@ -52,11 +57,16 @@ jobs:
           # Esto asegura que la rama temporal contenga SÓLO el estado actual de main.
           git checkout -b $BRANCH origin/main
           
-          # 3. Push de la rama temporal con el contenido de main
+          # 3. (Opcional, pero recomendado) Añadir un commit vacío para garantizar una diferencia en el HEAD.
+          # Esto asegura que la acción de PR se ejecute, incluso si la diferencia es mínima.
+          git commit --allow-empty -m "chore: temporary commit to force PR difference [automated]"
+          
+          # 4. Push de la rama temporal
           git push origin $BRANCH
 
       - name: Create Pull Request
-        # Este paso solo se ejecuta si el paso anterior no salió con 'exit 0'
+        # Solo se ejecuta si la verificación anterior no estableció SHOULD_SKIP=true
+        if: env.SHOULD_SKIP != 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT_FOR_PR }}
@@ -66,3 +76,7 @@ jobs:
           body: "This PR was automatically created to sync main into develop."
           draft: false
           delete-branch: true
+          # CLAVE DE LA SOLUCIÓN: Usar 'main' como la base de actualización. 
+          # Esto evita que la acción haga un rebase de la rama temporal sobre 'develop',
+          # preservando los commits de main y permitiendo que se detecte el diff.
+          base-branch-for-update: main
