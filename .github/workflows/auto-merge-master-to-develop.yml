@@ -1,21 +1,25 @@
-name: Merge main → develop
+name: Sync main → develop after PR merge
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
 
 permissions:
   contents: write
 
 jobs:
   merge:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Necesario para ver todas las ramas
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
@@ -39,5 +43,5 @@ jobs:
             exit 1
           fi
 
-          git commit -m "chore: merge main → develop [automated]"
+          git commit -m "chore: merge main → develop [automated after PR merge]"
           git push origin develop
