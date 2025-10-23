@@ -1,64 +1,66 @@
-name: Sync main → develop after PR merge or direct push
+name: Sync main → develop (Custom Action)
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
     types:
       - closed
-  push:
-    branches:
-      - main
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  merge:
+  sync-main-to-develop:
     runs-on: ubuntu-latest
+
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Configure Git
-      - name: Configure Git
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # 3️⃣ Decide if we should run merge
-      - name: Determine if merge should run
-        id: check_merge
+      - name: Create branch and push
+        id: create_branch
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            echo "run_merge=true" >> $GITHUB_OUTPUT
-          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" = "true" ] && [[ "${{ github.event.pull_request.head.ref }}" == hotfix/* ]]; then
-            echo "run_merge=true" >> $GITHUB_OUTPUT
-          else
-            echo "run_merge=false" >> $GITHUB_OUTPUT
-          fi
+          BRANCH="auto/sync-main-develop-$(date +%s)"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
-      # 4️⃣ Fetch develop branch
-      - name: Fetch develop branch
-        if: steps.check_merge.outputs.run_merge == 'true'
-        run: git fetch origin develop:develop
+          git fetch origin main
+          git fetch origin develop
 
-      # 5️⃣ Merge main into develop
-      - name: Merge main into develop
-        if: steps.check_merge.outputs.run_merge == 'true'
+          # Crear rama temporal basada en main
+          git checkout -b $BRANCH origin/main
+
+          # Push de la rama temporal
+          git push origin $BRANCH
+
+      - name: Create Pull Request via GitHub API
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_FOR_PR }}
+          BRANCH: ${{ env.BRANCH }}
         run: |
-          git checkout develop
-          set +e
-          git merge origin/main --no-commit --no-ff
-          MERGE_STATUS=$?
-          set -e
-          if [ $MERGE_STATUS -ne 0 ]; then
-            echo "❌ Conflictos detectados. Debes hacer el merge manualmente."
-            git merge --abort || true
-            exit 1
-          fi
-          git commit -m "chore: merge main → develop [automated]"
-          git push origin develop
+          API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls"
+          DATA=$(jq -n \
+            --arg title "chore: sync main → develop [automated]" \
+            --arg head "$BRANCH" \
+            --arg base "develop" \
+            --arg body "This PR was automatically created to sync main into develop." \
+            '{title: $title, head: $head, base: $base, body: $body}')
+          
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$API_URL" \
+            -d "$DATA")
+          
+          echo "PR Response: $RESPONSE"
