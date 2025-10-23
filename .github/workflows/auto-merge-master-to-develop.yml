@@ -53,4 +53,3 @@ jobs:
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
           draft: false
-          delete-branch: true
