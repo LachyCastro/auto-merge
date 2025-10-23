@@ -16,10 +16,20 @@ permissions:
 jobs:
   merge:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' || 
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     steps:
+      - name: Determine if we should run
+        id: check
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "run_merge=true" >> $GITHUB_OUTPUT
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            echo "run_merge=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_merge=false" >> $GITHUB_OUTPUT
+      - name: Exit if not a merged PR or push
+        if: ${{ steps.check.outputs.run_merge != 'true' }}
+        run: echo "Nothing to do" && exit 0
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -37,16 +47,13 @@ jobs:
         run: |
           git checkout develop
           set +e
-          
           git merge origin/main --no-commit --no-ff
           MERGE_STATUS=$?
-          
           set -e
           if [ $MERGE_STATUS -ne 0 ]; then
             echo "::warning:: ❌ Conflicts detected when merging 'main' into 'develop'. Synchronization must be done manually."
             git merge --abort || true
             exit 0
           fi
-          
           git commit -m "chore: merge main → develop [automated]"
           git push origin develop
