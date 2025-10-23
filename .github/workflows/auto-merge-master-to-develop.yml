@@ -22,6 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # Necesitamos profundidad 0 para comparar adecuadamente las ramas
           fetch-depth: 0
 
       - name: Configure git
@@ -29,27 +30,39 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create merge branch based on main
-        id: merge_branch
+      - name: Create sync branch based on main
+        id: sync_branch
         run: |
+          # Nombre de la rama temporal (basada en el timestamp)
           BRANCH="auto/sync-main-develop-$(date +%s)"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          # Traer main y develop
+          
+          # Traer main y develop (asegura que tengamos las referencias actualizadas)
           git fetch origin main
           git fetch origin develop
-          # Crear rama temporal basada en main
+          
+          # 1. Verificar si 'develop' ya contiene todos los commits de 'main'.
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "La rama 'main' es un ancestro de 'develop'. No hay nuevos commits en 'main' para sincronizar."
+            echo "Saltando la creación de rama y el Pull Request."
+            exit 0
+          fi
+
+          # 2. Crear la rama temporal basada exactamente en main
+          # Esto asegura que la rama temporal contenga SÓLO el estado actual de main.
           git checkout -b $BRANCH origin/main
-          # Merge con develop solo si quieres traer cambios de develop también
-          git merge origin/develop --no-ff -m "chore: merge develop into temp branch [automated]" || true
-          # Push de la rama temporal
+          
+          # 3. Push de la rama temporal con el contenido de main
           git push origin $BRANCH
 
       - name: Create Pull Request
+        # Este paso solo se ejecuta si el paso anterior no salió con 'exit 0'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT_FOR_PR }}
-          branch: ${{ env.BRANCH }}   # rama temporal basada en main
-          base: develop                # rama destino
+          branch: ${{ env.BRANCH }}       # rama temporal (origen del PR)
+          base: develop                  # rama destino
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
           draft: false
+          delete-branch: true
