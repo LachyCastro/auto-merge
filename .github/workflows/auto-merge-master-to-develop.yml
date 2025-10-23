@@ -56,4 +56,3 @@ jobs:
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
           draft: false                 # PR no es borrador
-          delete-branch: true          # borrar rama tras merge
