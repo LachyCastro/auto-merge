@@ -1,2 +1,2 @@
 # auto-merge
-# # Hotfix test
+# # Conflict test
