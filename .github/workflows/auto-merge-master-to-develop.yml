@@ -29,30 +29,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create merge branch
+      - name: Create merge branch based on main
         id: merge_branch
         run: |
           BRANCH="auto/sync-main-develop-$(date +%s)"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          # Traer todas las ramas y commits
-          git fetch origin develop
+          # Traer main y develop
           git fetch origin main
-          # Asegurarse que develop local esté actualizado
-          git checkout develop
-          git pull origin develop
-          # Crear rama intermedia
-          git checkout -b $BRANCH
-          # Merge de main en la rama intermedia
-          git merge origin/main --no-ff -m "chore: sync main → develop [automated]"
-          # Push de la rama intermedia
+          git fetch origin develop
+          # Crear rama temporal basada en main
+          git checkout -b $BRANCH origin/main
+          # Merge con develop solo si quieres traer cambios de develop también
+          git merge origin/develop --no-ff -m "chore: merge develop into temp branch [automated]" || true
+          # Push de la rama temporal
           git push origin $BRANCH
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT_FOR_PR }}
-          branch: ${{ env.BRANCH }}   # rama intermedia = head
+          branch: ${{ env.BRANCH }}   # rama temporal basada en main
           base: develop                # rama destino
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
-          draft: false                 # PR no es borrador
+          draft: false
+          delete-branch: true
