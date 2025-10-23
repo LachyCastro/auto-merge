@@ -38,7 +38,7 @@ jobs:
           set -e
 
           if [ $MERGE_STATUS -ne 0 ]; then
-            echo "❌ Conflictos detectados. Debes hacer el merge manualmente."
+            echo "❌ Conflicts detected. You must resolve the merge manually."
             git merge --abort || true
             exit 1
           fi
