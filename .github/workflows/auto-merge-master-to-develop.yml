@@ -1,11 +1,9 @@
 name: Sync main → develop
 
 on:
-  # Dispara cuando hay un push a main
   push:
     branches:
       - main
-  # Opcional: También se puede disparar si una PR a main se cierra (merged)
   pull_request:
     branches:
       - main
@@ -24,7 +22,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Necesitamos profundidad completa para las operaciones git y comparaciones
           fetch-depth: 0
 
       - name: Configure git
@@ -32,51 +29,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create sync branch based on main
-        id: sync_branch
+      - name: Create temporary branch based on main
+        id: merge_branch
         run: |
-          # Nombre de la rama temporal (basada en el timestamp)
           BRANCH="auto/sync-main-develop-$(date +%s)"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          
-          # Traer main y develop (asegura que tengamos las referencias actualizadas)
+          # Traer main y develop
           git fetch origin main
           git fetch origin develop
-          
-          # 1. Verificar si 'develop' ya contiene todos los commits de 'main'.
-          # Si 'main' es un ancestro de 'develop', no hay nuevos commits para sincronizar.
-          if git merge-base --is-ancestor origin/main origin/develop; then
-            echo "La rama 'main' es un ancestro de 'develop'. No hay nuevos commits en 'main' para sincronizar."
-            echo "Saltando la creación de rama y el Pull Request."
-            # Establecemos la variable para que el paso siguiente no se ejecute
-            echo "SHOULD_SKIP=true" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          # 2. Crear la rama temporal basada exactamente en main
-          # Esto asegura que la rama temporal contenga SÓLO el estado actual de main.
+          # Crear rama temporal basada en main
           git checkout -b $BRANCH origin/main
-          
-          # 3. (Opcional, pero recomendado) Añadir un commit vacío para garantizar una diferencia en el HEAD.
-          # Esto asegura que la acción de PR se ejecute, incluso si la diferencia es mínima.
-          git commit --allow-empty -m "chore: temporary commit to force PR difference [automated]"
-          
-          # 4. Push de la rama temporal
+          # Opcional: merge de develop si quieres incluir cambios de develop también
+          git merge origin/develop --no-ff -m "chore: merge develop into temp branch [automated]" || true
+          # Push de la rama temporal
           git push origin $BRANCH
 
       - name: Create Pull Request
-        # Solo se ejecuta si la verificación anterior no estableció SHOULD_SKIP=true
-        if: env.SHOULD_SKIP != 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT_FOR_PR }}
-          branch: ${{ env.BRANCH }}       # rama temporal (origen del PR)
-          base: develop                  # rama destino
+          branch: ${{ env.BRANCH }}   # rama temporal = "head"
+          base: develop               # rama destino
           title: "chore: sync main → develop [automated]"
           body: "This PR was automatically created to sync main into develop."
           draft: false
           delete-branch: true
-          # CLAVE DE LA SOLUCIÓN: Usar 'main' como la base de actualización. 
-          # Esto evita que la acción haga un rebase de la rama temporal sobre 'develop',
-          # preservando los commits de main y permitiendo que se detecte el diff.
-          base-branch-for-update: main
