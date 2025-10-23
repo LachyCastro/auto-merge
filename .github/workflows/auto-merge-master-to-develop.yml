@@ -1,4 +1,4 @@
-name: Sync main → develop
+name: Sync main → develop (Custom Action)
 
 on:
   push:
@@ -29,28 +29,38 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create temporary branch based on main
-        id: merge_branch
+      - name: Create branch and push
+        id: create_branch
         run: |
           BRANCH="auto/sync-main-develop-$(date +%s)"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          # Traer main y develop
+
           git fetch origin main
           git fetch origin develop
+
           # Crear rama temporal basada en main
           git checkout -b $BRANCH origin/main
-          # Opcional: merge de develop si quieres incluir cambios de develop también
-          git merge origin/develop --no-ff -m "chore: merge develop into temp branch [automated]" || true
+
           # Push de la rama temporal
           git push origin $BRANCH
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.PAT_FOR_PR }}
-          branch: ${{ env.BRANCH }}   # rama temporal = "head"
-          base: develop               # rama destino
-          title: "chore: sync main → develop [automated]"
-          body: "This PR was automatically created to sync main into develop."
-          draft: false
-          delete-branch: true
+      - name: Create Pull Request via GitHub API
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_FOR_PR }}
+          BRANCH: ${{ env.BRANCH }}
+        run: |
+          API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls"
+          DATA=$(jq -n \
+            --arg title "chore: sync main → develop [automated]" \
+            --arg head "$BRANCH" \
+            --arg base "develop" \
+            --arg body "This PR was automatically created to sync main into develop." \
+            '{title: $title, head: $head, base: $base, body: $body}')
+          
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$API_URL" \
+            -d "$DATA")
+          
+          echo "PR Response: $RESPONSE"
