@@ -67,7 +67,7 @@ jobs:
       - name: Create Pull Request
         # Solo se ejecuta si la verificación anterior no estableció SHOULD_SKIP=true
         if: env.SHOULD_SKIP != 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PAT_FOR_PR }}
           branch: ${{ env.BRANCH }}       # rama temporal (origen del PR)
