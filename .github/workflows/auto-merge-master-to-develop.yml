@@ -1,0 +1,40 @@
+name: Merge master → develop
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necesario para ver todas las ramas
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch develop branch
+        run: git fetch origin develop:develop
+
+      - name: Merge master into develop
+        run: |
+          git checkout develop
+          set +e
+          git merge origin/master --no-commit --no-ff
+          MERGE_STATUS=$?
+          set -e
+
+          if [ $MERGE_STATUS -ne 0 ]; then
+            echo "❌ Conflictos detectados. Debes hacer el merge manualmente."
+            git merge --abort || true
+            exit 1
+          fi
+
+          git commit -m "chore: merge master → develop [automated]"
+          git push origin develop
